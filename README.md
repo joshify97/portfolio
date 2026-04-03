@@ -50,7 +50,7 @@ portfolio/
    - Click "Save"
 
 3. **Access Your Website**:
-   - Your site will be available at: `https://your-username.github.io`
+   - Your site will be available at: `https://your-username.github.io/portfolio`
    - GitHub Pages may take a few minutes to deploy
 
 ### Method 2: Custom Domain (Optional)
