@@ -3,7 +3,7 @@
 This directory contains all documentation and downloadable files for your portfolio.
 
 ## Files
-- `resume.pdf` - Your current resume/CV
+- `CV_IT-Security.pdf` - Your current resume/CV
 
 ## Project Documentation
 The `projects/` subdirectory contains detailed case studies for each project:
