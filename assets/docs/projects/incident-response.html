@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incident Response Framework – Case Study</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-secondary: #111827;
+            --bg-card: #1a2332;
+            --text-primary: #e2e8f0;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-green: #34d399;
+            --accent-blue: #3b82f6;
+            --accent-red: #ef4444;
+            --accent-orange: #f59e0b;
+            --accent-purple: #a78bfa;
+            --accent-cyan: #22d3ee;
+            --accent-amber: #fbbf24;
+            --border-color: #1e293b;
+            --glow-orange: rgba(245, 158, 11, 0.12);
+            --glow-red: rgba(239, 68, 68, 0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Outfit', sans-serif; background: var(--bg-primary);
+            color: var(--text-primary); line-height: 1.7; overflow-x: hidden;
+        }
+        .noise-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+            pointer-events: none; z-index: 1000;
+        }
+        .hero {
+            position: relative; padding: 80px 40px 60px;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, var(--bg-primary) 0%, #140e08 50%, var(--bg-primary) 100%);
+        }
+        .hero::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at 25% 50%, var(--glow-orange), transparent 55%),
+                        radial-gradient(ellipse at 80% 30%, var(--glow-red), transparent 50%);
+            pointer-events: none;
+        }
+        .hero-content { max-width: 1200px; margin: 0 auto; position: relative; z-index: 1; }
+        .back-link {
+            display: inline-flex; align-items: center; gap: 8px;
+            color: var(--accent-orange); text-decoration: none; font-size: 0.9rem;
+            font-family: 'JetBrains Mono', monospace; margin-bottom: 40px; transition: gap 0.3s;
+        }
+        .back-link:hover { gap: 12px; }
+        .badge {
+            display: inline-block; padding: 6px 16px; border-radius: 100px;
+            background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3);
+            color: var(--accent-orange); font-size: 0.8rem; font-weight: 600;
+            font-family: 'JetBrains Mono', monospace; letter-spacing: 1px;
+            text-transform: uppercase; margin-bottom: 20px;
+        }
+        .hero h1 {
+            font-size: clamp(2.2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.1; margin-bottom: 20px;
+            background: linear-gradient(135deg, #fff 0%, var(--accent-orange) 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .hero-description { font-size: 1.15rem; color: var(--text-secondary); max-width: 700px; margin-bottom: 40px; }
+        .meta-row { display: flex; flex-wrap: wrap; gap: 32px; }
+        .meta-item { display: flex; flex-direction: column; gap: 4px; }
+        .meta-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+        .meta-value { font-size: 1rem; font-weight: 600; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 60px 40px; }
+        .section-title {
+            font-size: 1.6rem; font-weight: 700; margin-bottom: 32px;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .section-title::before { content: ''; width: 4px; height: 28px; background: var(--accent-orange); border-radius: 2px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 60px; }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 28px; text-align: center; transition: all 0.3s;
+        }
+        .stat-card:hover { border-color: var(--accent-orange); transform: translateY(-2px); }
+        .stat-number { font-size: 2.8rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; margin-bottom: 4px; }
+        .stat-label { font-size: 0.9rem; color: var(--text-secondary); }
+        .content-section { margin-bottom: 60px; }
+        .content-section p { color: var(--text-secondary); margin-bottom: 16px; font-size: 1.05rem; }
+
+        /* IR Phases */
+        .ir-phases { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 60px; }
+        .phase-card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 16px; padding: 32px; transition: all 0.3s; position: relative;
+        }
+        .phase-card:hover { border-color: var(--accent-orange); }
+        .phase-header { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+        .phase-icon {
+            width: 52px; height: 52px; border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem;
+        }
+        .phase-card:nth-child(1) .phase-icon { background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); }
+        .phase-card:nth-child(2) .phase-icon { background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); }
+        .phase-card:nth-child(3) .phase-icon { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); }
+        .phase-card:nth-child(4) .phase-icon { background: rgba(167, 139, 250, 0.12); border: 1px solid rgba(167, 139, 250, 0.3); }
+        .phase-card:nth-child(5) .phase-icon { background: rgba(52, 211, 153, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); }
+        .phase-card:nth-child(6) .phase-icon { background: rgba(34, 211, 238, 0.12); border: 1px solid rgba(34, 211, 238, 0.3); }
+        .phase-num { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); }
+        .phase-card h4 { font-size: 1.1rem; font-weight: 700; }
+        .phase-card p { font-size: 0.92rem; color: var(--text-secondary); margin-bottom: 16px; }
+        .phase-checklist { list-style: none; padding: 0; }
+        .phase-checklist li {
+            padding: 6px 0; font-size: 0.88rem; color: var(--text-secondary);
+            display: flex; align-items: flex-start; gap: 8px;
+        }
+        .phase-checklist li::before {
+            content: '✓'; color: var(--accent-green); font-weight: 700;
+            font-family: 'JetBrains Mono', monospace; min-width: 16px;
+        }
+
+        /* Severity Matrix */
+        .severity-matrix { margin-bottom: 60px; }
+        .matrix-grid {
+            display: grid; grid-template-columns: 140px repeat(4, 1fr);
+            gap: 2px; border-radius: 12px; overflow: hidden;
+        }
+        .matrix-cell {
+            padding: 16px; display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem; text-align: center;
+        }
+        .matrix-header {
+            background: var(--bg-card); font-weight: 700;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+            text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted);
+        }
+        .matrix-row-label {
+            background: var(--bg-card); font-weight: 600; font-size: 0.85rem;
+            justify-content: flex-start; padding-left: 20px;
+        }
+        .sev-p1 { background: rgba(239, 68, 68, 0.15); color: #ef4444; font-weight: 600; }
+        .sev-p2 { background: rgba(245, 158, 11, 0.12); color: #f59e0b; font-weight: 600; }
+        .sev-p3 { background: rgba(59, 130, 246, 0.1); color: #3b82f6; }
+        .sev-p4 { background: rgba(52, 211, 153, 0.08); color: #34d399; }
+
+        /* Playbook Table */
+        .data-table { width: 100%; border-collapse: collapse; margin-bottom: 40px; }
+        .data-table th {
+            text-align: left; padding: 14px 18px; background: var(--bg-card);
+            color: var(--accent-orange); font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;
+            border-bottom: 2px solid var(--accent-orange);
+        }
+        .data-table td { padding: 14px 18px; border-bottom: 1px solid var(--border-color); font-size: 0.95rem; }
+        .data-table tr:hover td { background: var(--bg-card); }
+        .playbook-id {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.82rem;
+            padding: 3px 10px; background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 6px;
+            color: var(--accent-orange);
+        }
+        .auto-badge {
+            display: inline-block; padding: 3px 10px; border-radius: 6px;
+            font-size: 0.78rem; font-family: 'JetBrains Mono', monospace;
+        }
+        .auto-full { background: rgba(52, 211, 153, 0.1); color: var(--accent-green); border: 1px solid rgba(52, 211, 153, 0.2); }
+        .auto-semi { background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.2); }
+        .auto-manual { background: rgba(167, 139, 250, 0.1); color: var(--accent-purple); border: 1px solid rgba(167, 139, 250, 0.2); }
+
+        /* Incident Stats Table */
+        .incident-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 60px; }
+        .incident-card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 24px; transition: border-color 0.3s;
+        }
+        .incident-card:hover { border-color: var(--accent-orange); }
+        .incident-card h5 { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace; margin-bottom: 12px; }
+        .incident-card .big-num { font-size: 2.2rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; margin-bottom: 6px; }
+        .incident-card .detail { font-size: 0.88rem; color: var(--text-secondary); }
+
+        .tech-grid { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+        .tech-tag {
+            padding: 8px 18px; border-radius: 8px; background: var(--bg-card);
+            border: 1px solid var(--border-color); font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem; color: var(--text-secondary); transition: all 0.3s;
+        }
+        .tech-tag:hover { border-color: var(--accent-orange); color: var(--accent-orange); }
+
+        .info-card {
+            background: var(--bg-card); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 28px; transition: border-color 0.3s;
+        }
+        .info-card:hover { border-color: var(--accent-orange); }
+        .info-card h4 { color: var(--accent-orange); margin-bottom: 10px; }
+        .info-card p { font-size: 0.92rem; color: var(--text-secondary); margin: 0; }
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+
+        .case-footer {
+            border-top: 1px solid var(--border-color); padding: 40px;
+            text-align: center; color: var(--text-muted); font-size: 0.85rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero { padding: 40px 20px; }
+            .container { padding: 40px 20px; }
+            .ir-phases { grid-template-columns: 1fr; }
+            .matrix-grid { grid-template-columns: 100px repeat(4, 1fr); font-size: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="noise-overlay"></div>
+
+    <section class="hero">
+        <div class="hero-content">
+            <a href="index.html" class="back-link">← Zurück zum Portfolio</a>
+            <div class="badge">Case Study</div>
+            <h1>Incident Response Framework</h1>
+            <p class="hero-description">
+                Design und Implementierung eines strukturierten Frameworks für die Erkennung, Analyse, Eindämmung und Behebung von Sicherheitsvorfällen – angelehnt an NIST SP 800-61.
+            </p>
+            <div class="meta-row">
+                <div class="meta-item">
+                    <span class="meta-label">Branche</span>
+                    <span class="meta-value">Versicherung / FinSec</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Dauer</span>
+                    <span class="meta-value">6 Monate</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Rolle</span>
+                    <span class="meta-value">Incident Responder</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Status</span>
+                    <span class="meta-value" style="color: var(--accent-green);">Abgeschlossen</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="container">
+
+        <!-- KPIs -->
+        <h2 class="section-title">Ergebnisse auf einen Blick</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" style="color: var(--accent-orange);">14</div>
+                <div class="stat-label">Playbooks erstellt</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: var(--accent-green);">-68%</div>
+                <div class="stat-label">Reduktion der MTTR</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: var(--accent-blue);">4</div>
+                <div class="stat-label">Tabletop-Exercises durchgeführt</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" style="color: var(--accent-red);">0</div>
+                <div class="stat-label">Meldepflicht-Verstöße</div>
+            </div>
+        </div>
+
+        <!-- Ausgangslage -->
+        <div class="content-section">
+            <h2 class="section-title">Ausgangslage</h2>
+            <p>Das Unternehmen hatte keinen formalisierten Incident-Response-Prozess. Sicherheitsvorfälle wurden ad-hoc behandelt, ohne standardisierte Kommunikationswege, Eskalationsstufen oder Dokumentation. Die regulatorische Meldepflicht (DSGVO, DORA) konnte nicht zuverlässig eingehalten werden.</p>
+            <p>Nach einem Ransomware-Vorfall, dessen Bearbeitung über 3 Wochen dauerte, wurde das Projekt priorisiert. Ziel war ein vollständiges IR-Framework mit definierten Prozessen, Playbooks und regelmäßigen Übungen.</p>
+        </div>
+
+        <!-- IR Phasen -->
+        <h2 class="section-title">IR-Phasen (NIST SP 800-61)</h2>
+        <div class="ir-phases">
+            <div class="phase-card">
+                <div class="phase-header">
+                    <div class="phase-icon">🛡️</div>
+                    <div><div class="phase-num">Phase 1</div><h4>Preparation</h4></div>
+                </div>
+                <p>Aufbau der organisatorischen und technischen Grundlagen für eine effektive Incident Response.</p>
+                <ul class="phase-checklist">
+                    <li>IR-Team und RACI-Matrix definiert</li>
+                    <li>Kommunikationsplan erstellt</li>
+                    <li>Toolchain aufgesetzt (SOAR, Forensik)</li>
+                    <li>Playbook-Bibliothek initial befüllt</li>
+                </ul>
+            </div>
+            <div class="phase-card">
+                <div class="phase-header">
+                    <div class="phase-icon">🔍</div>
+                    <div><div class="phase-num">Phase 2</div><h4>Detection & Analysis</h4></div>
+                </div>
+                <p>Systematische Erkennung und Bewertung von Sicherheitsvorfällen.</p>
+                <ul class="phase-checklist">
+                    <li>SIEM-Alerts als Trigger integriert</li>
+                    <li>Severity-Klassifikation (P1–P4) definiert</li>
+                    <li>Triage-Checklisten für Analysten</li>
+                    <li>IoC-Enrichment automatisiert</li>
+                </ul>
+            </div>
+            <div class="phase-card">
+                <div class="phase-header">
+                    <div class="phase-icon">🚧</div>
+                    <div><div class="phase-num">Phase 3</div><h4>Containment</h4></div>
+                </div>
+                <p>Schnelle Eindämmung zur Minimierung des Schadens und Verhinderung der Ausbreitung.</p>
+                <ul class="phase-checklist">
+                    <li>Kurzfristige Isolation (Netzwerk-Segmentierung)</li>
+                    <li>Account-Sperrungen via SOAR</li>
+                    <li>Forensische Sicherung vor Cleanup</li>
+                    <li>Entscheidungsmatrix: Isolieren vs. Beobachten</li>
+                </ul>
+            </div>
+            <div class="phase-card">
+                <div class="phase-header">
+                    <div class="phase-icon">🧹</div>
+                    <div><div class="phase-num">Phase 4</div><h4>Eradication</h4></div>
+                </div>
+                <p>Vollständige Entfernung der Bedrohung aus der Umgebung.</p>
+                <ul class="phase-checklist">
+                    <li>Malware-Entfernung und System-Reimaging</li>
+                    <li>Credential-Reset aller betroffenen Accounts</li>
+                    <li>Schwachstellen-Patching (Root Cause)</li>
+                    <li>Verifizierung durch Re-Scan</li>
+                </ul>
+            </div>
+            <div class="phase-card">
+                <div class="phase-header">
+                    <div class="phase-icon">🔄</div>
+                    <div><div class="phase-num">Phase 5</div><h4>Recovery</h4></div>
+                </div>
+                <p>Kontrollierte Wiederherstellung des Normalbetriebs.</p>
+                <ul class="phase-checklist">
+                    <li>Systeme schrittweise wieder online bringen</li>
+                    <li>Intensiviertes Monitoring (30 Tage)</li>
+                    <li>Business-Continuity-Validierung</li>
+                    <li>Stakeholder-Kommunikation</li>
+                </ul>
+            </div>
+            <div class="phase-card">
+                <div class="phase-header">
+                    <div class="phase-icon">📋</div>
+                    <div><div class="phase-num">Phase 6</div><h4>Lessons Learned</h4></div>
+                </div>
+                <p>Strukturierte Nachbereitung zur kontinuierlichen Verbesserung.</p>
+                <ul class="phase-checklist">
+                    <li>Post-Incident-Review (PIR) innerhalb 5 Tage</li>
+                    <li>Root-Cause-Analyse dokumentiert</li>
+                    <li>Action-Items mit Verantwortlichen tracken</li>
+                    <li>Playbook-Updates basierend auf Erkenntnissen</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Severity Matrix -->
+        <div class="severity-matrix">
+            <h2 class="section-title">Severity-Klassifikation</h2>
+            <div class="matrix-grid">
+                <div class="matrix-cell matrix-header"></div>
+                <div class="matrix-cell matrix-header">Response-Zeit</div>
+                <div class="matrix-cell matrix-header">Eskalation</div>
+                <div class="matrix-cell matrix-header">Update-Frequenz</div>
+                <div class="matrix-cell matrix-header">Meldepflicht</div>
+
+                <div class="matrix-cell matrix-row-label" style="color: var(--accent-red);">P1 – Critical</div>
+                <div class="matrix-cell sev-p1">Sofort (24/7)</div>
+                <div class="matrix-cell sev-p1">CISO + Vorstand</div>
+                <div class="matrix-cell sev-p1">Alle 2 Stunden</div>
+                <div class="matrix-cell sev-p1">Ja (72h DSGVO)</div>
+
+                <div class="matrix-cell matrix-row-label" style="color: var(--accent-orange);">P2 – High</div>
+                <div class="matrix-cell sev-p2">< 1 Stunde</div>
+                <div class="matrix-cell sev-p2">CISO</div>
+                <div class="matrix-cell sev-p2">Alle 4 Stunden</div>
+                <div class="matrix-cell sev-p2">Prüfung erforderlich</div>
+
+                <div class="matrix-cell matrix-row-label" style="color: var(--accent-blue);">P3 – Medium</div>
+                <div class="matrix-cell sev-p3">< 4 Stunden</div>
+                <div class="matrix-cell sev-p3">SOC Lead</div>
+                <div class="matrix-cell sev-p3">Täglich</div>
+                <div class="matrix-cell sev-p3">Nein</div>
+
+                <div class="matrix-cell matrix-row-label" style="color: var(--accent-green);">P4 – Low</div>
+                <div class="matrix-cell sev-p4">Nächster Arbeitstag</div>
+                <div class="matrix-cell sev-p4">SOC Analyst</div>
+                <div class="matrix-cell sev-p4">Bei Abschluss</div>
+                <div class="matrix-cell sev-p4">Nein</div>
+            </div>
+        </div>
+
+        <!-- Playbooks -->
+        <div class="content-section">
+            <h2 class="section-title">Erstellte Playbooks (Auswahl)</h2>
+            <table class="data-table">
+                <thead>
+                    <tr><th>ID</th><th>Playbook</th><th>Trigger</th><th>Automatisierung</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="playbook-id">PB-001</span></td>
+                        <td>Ransomware Response</td>
+                        <td>EDR-Alert: Verschlüsselungsaktivität</td>
+                        <td><span class="auto-badge auto-semi">Semi-automatisch</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="playbook-id">PB-002</span></td>
+                        <td>Phishing Incident</td>
+                        <td>User-Meldung / E-Mail-Gateway-Alert</td>
+                        <td><span class="auto-badge auto-full">Vollautomatisch</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="playbook-id">PB-003</span></td>
+                        <td>Compromised Account</td>
+                        <td>Impossible Travel / Brute-Force-Alert</td>
+                        <td><span class="auto-badge auto-full">Vollautomatisch</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="playbook-id">PB-004</span></td>
+                        <td>Data Exfiltration</td>
+                        <td>DLP-Alert / anomaler Datenabfluss</td>
+                        <td><span class="auto-badge auto-semi">Semi-automatisch</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="playbook-id">PB-005</span></td>
+                        <td>Insider Threat</td>
+                        <td>UEBA-Anomalie / HR-Meldung</td>
+                        <td><span class="auto-badge auto-manual">Manuell</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="playbook-id">PB-006</span></td>
+                        <td>DDoS Response</td>
+                        <td>WAF / Netzwerk-Monitoring-Alert</td>
+                        <td><span class="auto-badge auto-full">Vollautomatisch</span></td>
+                    </tr>
+                    <tr>
+                        <td><span class="playbook-id">PB-007</span></td>
+                        <td>Supply Chain Compromise</td>
+                        <td>Threat-Intel-Feed / Vendor-Advisory</td>
+                        <td><span class="auto-badge auto-manual">Manuell</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Incident-Statistiken -->
+        <h2 class="section-title">Incident-Statistiken (12 Monate nach Go-Live)</h2>
+        <div class="incident-summary">
+            <div class="incident-card">
+                <h5>Gesamt-Incidents</h5>
+                <div class="big-num" style="color: var(--accent-blue);">247</div>
+                <div class="detail">Davon 12 P1/P2 (4,9%)</div>
+            </div>
+            <div class="incident-card">
+                <h5>Ø MTTR (P1)</h5>
+                <div class="big-num" style="color: var(--accent-green);">2,4h</div>
+                <div class="detail">Vorher: 7,5h (–68%)</div>
+            </div>
+            <div class="incident-card">
+                <h5>Ø MTTD</h5>
+                <div class="big-num" style="color: var(--accent-cyan);">8 Min</div>
+                <div class="detail">Vorher: 4,2 Tage</div>
+            </div>
+            <div class="incident-card">
+                <h5>Playbook-Coverage</h5>
+                <div class="big-num" style="color: var(--accent-orange);">92%</div>
+                <div class="detail">Aller Incident-Typen abgedeckt</div>
+            </div>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="content-section">
+            <h2 class="section-title">Eingesetzte Technologien</h2>
+            <div class="tech-grid">
+                <span class="tech-tag">Palo Alto XSOAR</span>
+                <span class="tech-tag">Elastic SIEM</span>
+                <span class="tech-tag">CrowdStrike Falcon</span>
+                <span class="tech-tag">TheHive</span>
+                <span class="tech-tag">MISP</span>
+                <span class="tech-tag">Velociraptor</span>
+                <span class="tech-tag">Volatility 3</span>
+                <span class="tech-tag">MITRE ATT&CK</span>
+                <span class="tech-tag">Confluence (Runbooks)</span>
+                <span class="tech-tag">Jira (Tracking)</span>
+                <span class="tech-tag">Python (Automation)</span>
+                <span class="tech-tag">YARA Rules</span>
+            </div>
+        </div>
+
+        <!-- Lessons Learned -->
+        <div class="content-section">
+            <h2 class="section-title">Lessons Learned</h2>
+            <div class="card-grid">
+                <div class="info-card">
+                    <h4>Übung macht den Meister</h4>
+                    <p>Tabletop-Exercises haben kritische Lücken im Kommunikationsplan aufgedeckt. Ohne regelmäßige Übungen bleiben Playbooks rein theoretisch.</p>
+                </div>
+                <div class="info-card">
+                    <h4>Meldepflichten früh einplanen</h4>
+                    <p>Die 72-Stunden-Frist der DSGVO und die DORA-Anforderungen müssen von Anfang an in den Prozess integriert werden – nicht erst bei einem realen Vorfall.</p>
+                </div>
+                <div class="info-card">
+                    <h4>SOAR-Integration schrittweise</h4>
+                    <p>Zu viel Automatisierung auf einmal führt zu Fehlalarmen und Vertrauensverlust. Schrittweiser Ausbau mit Validierungsphasen war der richtige Ansatz.</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <footer class="case-footer">
+        <p>© 2025 – Security Portfolio. Alle Daten anonymisiert und vereinfacht dargestellt.</p>
+    </footer>
+</body>
+</html>
